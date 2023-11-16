@@ -1,102 +1,83 @@
-import { fetchBreeds, fetchCatByBreed } from './cat-api';
-import { getSlider } from 'simple-slider';
+import axios from 'axios';
+import { fetchBreeds } from './cat-api.js';
+import { fetchCatByBreed } from './cat-api.js';
 import SlimSelect from 'slim-select';
-import Notiflix from 'notiflix';
+import 'slim-select/dist/slimselect.css';
+import { Notify } from 'notiflix/build/notiflix-notify-aio';
 
-var simpleslider = require('simple-slider');
-
-const elements = {
-  select: document.querySelector('.breed-select'),
-  loader: document.querySelector('.loader'),
-  error: document.querySelector('.error'),
+const refs = {
+  selectEl: document.querySelector('.breed-select'),
   catInfo: document.querySelector('.cat-info'),
-  container: document.getElementById('myslider'),
+  loadEl: document.querySelector('.backdrop'),
 };
 
-elements.error.classList.add('is-hidden');
-elements.loader.classList.add('is-hidden');
-elements.select.classList.add('is-hidden');
+function fillBreedList(breeds) {
+  breeds.forEach(breed => {
+    renderBreedOptions(breed.id, breed.name);
+  });
+  new SlimSelect({
+    select: refs.selectEl,
+  });
+}
+function renderBreedOptions(id, name) {
+  const selectList = `<option value="${id}">${name}</option>`;
+  refs.selectEl.insertAdjacentHTML('beforeend', selectList);
+}
 
-let selectedArr = null;
-
+showSpinner();
 fetchBreeds()
-  .then(data => {
-    selectedArr = data;
-    if (data.length) {
-      elements.select.classList.remove('is-hidden');
-    }
-    elements.loader.classList.add('is-hidden');
-    elements.select.insertAdjacentHTML('afterbegin', selectedOptions(data));
-    new SlimSelect({
-      select: '#single',
+  .then(fillBreedList)
+  .catch(error => {
+    Notify.failure('Oops! Something went wrong! Try reloading the page!', {
+      clickToClose: true,
+      position: 'center-top',
+      distance: '50px',
     });
+    console.log(error);
   })
-  .catch(err => {
-    elements.select.innerHTML = '';
-    elements.loader.classList.remove('is-hidden');
-
-    Notiflix.Notify.failure(err);
+  .finally(() => {
+    hideSpinner();
   });
 
-function selectedOptions(arr) {
-  selectedArr = arr;
-  return arr
-    .map(
-      obj => `
-    <option value="${obj.id}">${obj.name}</option>
-  `
-    )
-    .join('');
-}
+refs.selectEl.addEventListener('change', onSelectBreed);
 
-elements.select.addEventListener('change', handlerOption);
-
-function handlerOption(evt) {
-  elements.catInfo.innerHTML = '';
-  elements.loader.classList.remove('is-hidden');
-  let selectedId = evt.target.value;
-
-  fetchCatByBreed(selectedId)
-    .then(data => {
-      elements.catInfo.insertAdjacentHTML(
-        'beforeend',
-        createMarkup(selectedArr, selectedId)
-      );
-      elements.container.insertAdjacentHTML('afterbegin', createCatImg(data));
-      simpleslider.getSlider({
-        container: elements.container,
-        prop: 'left',
-        init: -312,
-        show: 0,
-        end: 312,
-        unit: 'px',
+function onSelectBreed(event) {
+  const breedId = event.target.value;
+  refs.catInfo.innerHTML = '';
+  showSpinner();
+  fetchCatByBreed(breedId)
+    .then(renderCatInfo)
+    .catch(error => {
+      Notify.failure('Oops! Something went wrong! Try reloading the page!', {
+        clickToClose: true,
+        position: 'center-top',
+        distance: '50px',
       });
-    })
-    .catch(err => {
-      Notiflix.Notify.failure(err);
+      console.error(error);
     })
     .finally(() => {
-      elements.loader.classList.add('is-hidden');
+      hideSpinner();
     });
 }
-
-function createMarkup(arr, id) {
-  const index = arr.findIndex(el => el.id === id);
-  return `
-    <div id="myslider" style="width:312px; height:312px"></div>
-      <h2>${arr[index].name}</h2>
-      <p>${arr[index].description}</p>
-      <h3>Temperament</h3>
-      <p>${arr[index].temperament}</p>
-    `;
+function renderCatInfo({ url, breeds }) {
+  const { name, description, temperament } = breeds[0];
+  const markup = `<div class="img-wrap">
+  <img class="cat-img" src="${url}" alt="${name}" width="360"/>
+  </div>
+  <div class="cat-description">
+  <h2 class="cat-breed">${name}</h2>
+  <p class="breed-descript">${description}</p>
+  <p class="temperament">
+  <span class="temperam-title">Temperament: </span>${temperament}
+  </p>
+  </div>`;
+  refs.catInfo.innerHTML = markup;
 }
 
-function createCatImg(arr) {
-  return arr
-    .map(
-      obj => `
-        <img src="${obj.url}" width="312px">
-        `
-    )
-    .join('');
+function showSpinner() {
+  refs.loadEl.classList.remove('is-hidden');
+}
+
+function hideSpinner() {
+  refs.loadEl.classList.add('is-hidden');
 }
